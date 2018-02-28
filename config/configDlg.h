@@ -6,6 +6,7 @@
 #include "afxwin.h"
 #include "afxcmn.h"
 #include "configDlg.h"
+#include "ColorListCtrl.h"
 #include "PythonFileInfo.h"
 #include <vector>
 
@@ -46,9 +47,13 @@ protected:
 public:
 	afx_msg void OnBnClickedButtonConfig();
 	afx_msg void OnBnClickedButtonDir();
-	CListCtrl m_lc;
-	void GetFileInfo(CString filename, CString &name, CString &desc);
+	CColorListCtrl m_lc;
+	void GetFileInfo(CString filename, CPythonFileInfo&);
 	CButton m_btnCfg;
+	afx_msg void OnNMDblclkList1(NMHDR *pNMHDR, LRESULT *pResult);
+	afx_msg void OnBnClickedButton1();
+	CString m_batName;
+	CButton m_btnBat;
 };
 static int CALLBACK BrowseCallbackProc ( HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpData);
 int UTF82GBK(char *szUtf8,char *&szGbk,int Len);

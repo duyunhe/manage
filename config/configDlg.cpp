@@ -57,6 +57,7 @@ END_MESSAGE_MAP()
 
 CconfigDlg::CconfigDlg(CWnd* pParent /*=NULL*/)
 	: CDialogEx(CconfigDlg::IDD, pParent)
+	, m_batName(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -66,6 +67,8 @@ void CconfigDlg::DoDataExchange(CDataExchange* pDX)
 	CDialogEx::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_LIST1, m_lc);
 	DDX_Control(pDX, IDC_BUTTON_CONFIG, m_btnCfg);
+	DDX_Text(pDX, IDC_EDIT1, m_batName);
+	DDX_Control(pDX, IDC_BUTTON1, m_btnBat);
 }
 
 BEGIN_MESSAGE_MAP(CconfigDlg, CDialogEx)
@@ -74,6 +77,8 @@ BEGIN_MESSAGE_MAP(CconfigDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BUTTON_CONFIG, &CconfigDlg::OnBnClickedButtonConfig)
 	ON_BN_CLICKED(IDC_BUTTON_DIR, &CconfigDlg::OnBnClickedButtonDir)
+	ON_NOTIFY(NM_DBLCLK, IDC_LIST1, &CconfigDlg::OnNMDblclkList1)
+	ON_BN_CLICKED(IDC_BUTTON1, &CconfigDlg::OnBnClickedButton1)
 END_MESSAGE_MAP()
 
 
@@ -110,7 +115,10 @@ BOOL CconfigDlg::OnInitDialog()
 
 	// TODO: 在此添加额外的初始化代码
 	InitListCtrl();
+	m_batName = "start.bat";
 	m_btnCfg.EnableWindow(FALSE);
+	m_btnBat.EnableWindow(FALSE);
+	UpdateData(FALSE);
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
@@ -180,7 +188,7 @@ void CconfigDlg::OnBnClickedButtonDir()
 	// TODO: 在此添加控件通知处理程序代码
 	CString root = ReadConfig();
 	TCHAR targetPath[MAX_PATH]; 
-	_tcscpy_s(targetPath, root);//自己设置的文件夹路径  
+	_tcscpy_s(targetPath, root);		//自己设置的文件夹路径  
 	CString str;
 	
 	BROWSEINFO bi;   
@@ -198,12 +206,13 @@ void CconfigDlg::OnBnClickedButtonDir()
 
 	if(lp && SHGetPathFromIDList(lp, targetPath))
 	{
-		str.Format("当前目录： %s", targetPath);
+		str.Format("程序目录： %s", targetPath);
 		SetDlgItemText(IDC_STATIC1, str);
 		SaveConfig(targetPath);
 		ShowAllFiles(targetPath);
 		m_path = targetPath;
 		m_btnCfg.EnableWindow(TRUE);
+		m_btnBat.EnableWindow(TRUE);
 	}
 	//m_btnCfg.set
 }
@@ -230,9 +239,10 @@ void CconfigDlg::ShowAllFiles(CString Curdir)
 		IsOver = true;							//查找过程结束
 
 	m_fileList.clear();
+	ClearFileInfo();
 	while(!IsOver)
 	{
-		strname.Format("%s", wfdata.cFileName);	//获取找到的文件名
+		strname.Format("%s", wfdata.cFileName);		//获取找到的文件名
 		strfull = Curdir + "\\" + strname;			//全路径
 		//if(wfdata.cFileName[0]!=_TEXT('.'))
 		m_fileList.push_back(strfull);
@@ -245,6 +255,7 @@ void CconfigDlg::ShowAllFiles(CString Curdir)
 	{
 		InsertIntoList(i, m_fileList[i]);
 	}
+	Invalidate(TRUE);
 }
 
 CString CconfigDlg::ReadConfig()
@@ -278,47 +289,66 @@ void CconfigDlg::SaveConfig(CString str)
 void CconfigDlg::InsertIntoList(int idx, CString filename)
 {
 	m_lc.InsertItem(idx, "编号");
-	CString name, desc;
-	GetFileInfo(filename, name, desc);
-	m_lc.SetItemText(idx, 0, name);
-	m_lc.SetItemText(idx, 1, desc);
-	m_lc.SetItemText(idx, 2, "使用中");
+	CPythonFileInfo *fileinfo = new CPythonFileInfo();
+	GetFileInfo(filename, *fileinfo);
+	m_fileinfoList.push_back(fileinfo);
+
+	m_lc.SetItemText(idx, 0, fileinfo->author);
+	m_lc.SetItemText(idx, 1, fileinfo->filename);
+	m_lc.SetItemText(idx, 2, fileinfo->desc);
+	m_lc.SetItemText(idx, 3, "使用");
 }
 
-void CconfigDlg::GetFileInfo(CString filename, CString &name, CString &desc)
+void CconfigDlg::GetFileInfo(CString filename, CPythonFileInfo &fileinfo)
 {
 	fstream fin(filename);
 	string readline;
+	CString name, desc, author;
+
 	while (getline(fin, readline)) //逐行读取，直到结束
 	{
-		int pos = readline.find_first_of('@');
+		char *sz = new char[256];
+		UTF82GBK((char*)readline.c_str(), sz, 100);
+		string new_line(sz);
+		delete sz;
+		// utf8转gb2312
+		int pos = new_line.find_first_of('@');
+		
 		if(pos != -1)
 		{
-			pos = readline.find_first_of('F', pos + 1);
-			if(pos != -1)
+			int pos1 = pos + 1;
+			if(new_line[pos1] == 'F')
 			{
-				pos = readline.find_first_of(':');
-				int pos2 = readline.find_first_of('.', pos);
-				string sub = readline.substr(pos + 2, pos2 - pos - 2);
+				pos = new_line.find_first_of(':', pos1);
+				int pos2 = new_line.find_first_of('.', pos);
+				string sub = new_line.substr(pos + 2, pos2 - pos - 2);
 				name = sub.c_str();
 			}
-
-			char *sz = new char[256];
-			UTF82GBK((char*)readline.c_str(), sz, 100);
-			string new_line(sz);
-			pos = new_line.find_first_of('简', pos + 1);
-			delete sz;
-
-			if(pos != -1)
+			else if(new_line[pos1] == 'A')
 			{
-				TRACE("%d\n", pos);
-				pos = new_line.find_first_of(':');
+				pos = new_line.find_first_of(':', pos1);
+				int pos2 = new_line.find_first_of('.', pos);
+				string sub = new_line.substr(pos + 2, pos2 - pos - 2);
+				author = sub.c_str();
+			}
+			else
+			{
+				int pos1 = new_line.find_first_of('简');
+				if(pos1 != pos + 2)
+					continue;
+				pos = new_line.find_first_of(':', pos1);
 				int pos2 = new_line.find_first_of('.', pos);
 				string sub = new_line.substr(pos + 2, pos2 - pos - 2);
 				desc = sub.c_str();
 			}
+			
 		}
 	}
+
+	fileinfo.author = author;
+	fileinfo.desc = desc;
+	fileinfo.filename = name;
+	fileinfo.used = 1;
 }
 
 void CconfigDlg::ClearFileInfo()
@@ -373,4 +403,63 @@ int UTF82GBK(char *szUtf8,char *&szGbk,int Len)
 	wszGBK = NULL;
 
 	return 0;
+}
+
+void CconfigDlg::OnNMDblclkList1(NMHDR *pNMHDR, LRESULT *pResult)
+{
+	LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+	NMLISTVIEW *pp = (NMLISTVIEW*)pNMHDR;
+	int i = pp->iItem;
+	int j = pp->iSubItem;
+	m_fileinfoList[i]->used = !m_fileinfoList[i]->used;
+	if(m_fileinfoList[i]->used)
+	{
+		m_lc.SetItemText(i, 3, "使用");
+	}
+	else
+	{
+		m_lc.SetItemText(i, 3, "未使用");
+	}
+	Invalidate(TRUE);
+}
+
+
+void CconfigDlg::OnBnClickedButton1()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	UpdateData(TRUE);
+	CFile file;
+	CString filename = m_path + "\\" + m_batName;
+	file.Open(filename, CFile::modeCreate | CFile::modeWrite|CFile::typeBinary);
+	file.SeekToBegin();
+	 
+	file.Write("@echo off\n", 10);
+	int idx = 1;
+	for(int i = 0; i < m_fileinfoList.size(); ++ i)
+	{
+		if(!m_fileinfoList[i]->used) continue;
+		CString filename = " python " + m_fileinfoList[i]->filename + ".py\n";
+
+		CString str_idx;
+		str_idx.Format("start \"%d.", idx);
+		CString desc = str_idx + m_fileinfoList[i]->filename + "\" /min cmd /c";
+		char sz[256];
+		strcpy(sz, desc.GetBuffer());
+		file.Write(sz, strlen(sz));
+
+		strcpy(sz, filename.GetBuffer());
+		filename.ReleaseBuffer();
+		file.Write(sz, strlen(sz));
+		//file.Write(sz, strlen(sz));
+		idx ++;
+	}
+	char sz[256];
+	strcpy(sz, "pause\n");
+	file.Write(sz, strlen(sz));
+	file.Write("exit\n", 5);
+	file.Close();
+
+	MessageBox("在程序目录下已经生成脚本！");
 }

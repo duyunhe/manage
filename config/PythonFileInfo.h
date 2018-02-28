@@ -2,11 +2,11 @@
 #pragma once
 class CPythonFileInfo
 {
+public:
 	CString filename;
 	CString author;
 	CString desc;
 	bool	used;
-public:
 	CPythonFileInfo(void);
 	~CPythonFileInfo(void);
 };
